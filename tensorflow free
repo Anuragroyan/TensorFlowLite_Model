@@ -1,0 +1,187 @@
+Great! Let's walk through how to **train a Naive Bayes sarcasm detection model in Python**, **export the model data**, and then **rebuild the model logic in Dart** using the exported data — **no TensorFlow used**.
+
+---
+
+## ✅ PART 1: Train Naive Bayes Model in Python
+
+### 1.1 Install requirements
+
+```bash
+pip install scikit-learn pandas nltk
+```
+
+### 1.2 Python Code to Train and Export Model
+
+```python
+# train_sarcasm_model.py
+
+import pandas as pd
+import json
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+
+# 1. Sample dataset (you can expand it)
+data = {
+    "text": [
+        "Yeah right, that was amazing",       # Sarcastic
+        "I love spending time in traffic",    # Sarcastic
+        "What a surprise, he failed again",   # Sarcastic
+        "I had a great day at the park",      # Not Sarcastic
+        "She is really talented",             # Not Sarcastic
+        "The food was delicious",             # Not Sarcastic
+    ],
+    "label": [1, 1, 1, 0, 0, 0]  # 1 = Sarcastic, 0 = Not
+}
+
+df = pd.DataFrame(data)
+
+# 2. Vectorize text
+vectorizer = CountVectorizer(binary=True)
+X = vectorizer.fit_transform(df["text"])
+y = df["label"]
+
+# 3. Train Naive Bayes model
+model = MultinomialNB()
+model.fit(X, y)
+
+# 4. Export vocabulary and class log probabilities
+export_data = {
+    "vocabulary": vectorizer.vocabulary_,
+    "class_log_prior": model.class_log_prior_.tolist(),
+    "feature_log_prob": model.feature_log_prob_.tolist(),
+    "classes": model.classes_.tolist()
+}
+
+# 5. Save to JSON
+with open("naive_bayes_model.json", "w") as f:
+    json.dump(export_data, f)
+
+print("Model exported to naive_bayes_model.json")
+```
+
+---
+
+## ✅ PART 2: Use Exported Model in Dart (Flutter)
+
+Assume you now have a file called `naive_bayes_model.json` in your Flutter `assets` folder.
+
+### 2.1 Add JSON to Assets
+
+In `pubspec.yaml`:
+
+```yaml
+flutter:
+  assets:
+    - assets/naive_bayes_model.json
+```
+
+---
+
+### 2.2 Dart Model Logic: `sarcasm_detector.dart`
+
+```dart
+import 'dart:convert';
+import 'package:flutter/services.dart';
+
+class SarcasmDetector {
+  late Map<String, int> vocabulary;
+  late List<List<double>> featureLogProb;
+  late List<double> classLogPrior;
+  late List<int> classes;
+
+  Future<void> loadModel(String path) async {
+    final jsonString = await rootBundle.loadString(path);
+    final jsonData = json.decode(jsonString);
+
+    vocabulary = Map<String, int>.from(jsonData['vocabulary']);
+    featureLogProb = (jsonData['feature_log_prob'] as List)
+        .map((row) => (row as List).map((val) => val.toDouble()).toList())
+        .toList();
+    classLogPrior =
+        (jsonData['class_log_prior'] as List).map((e) => e.toDouble()).toList();
+    classes = List<int>.from(jsonData['classes']);
+  }
+
+  int predict(String inputText) {
+    final tokens = inputText.toLowerCase().split(RegExp(r'\W+'));
+    final inputVector = List<int>.filled(vocabulary.length, 0);
+
+    for (var token in tokens) {
+      if (vocabulary.containsKey(token)) {
+        inputVector[vocabulary[token]!] = 1;
+      }
+    }
+
+    final scores = List<double>.from(classLogPrior);
+    for (int classIdx = 0; classIdx < classes.length; classIdx++) {
+      for (int i = 0; i < inputVector.length; i++) {
+        if (inputVector[i] == 1) {
+          scores[classIdx] += featureLogProb[classIdx][i];
+        }
+      }
+    }
+
+    return classes[scores[0] > scores[1] ? 0 : 1];
+  }
+
+  Future<bool> isSarcastic(String text) async {
+    final result = predict(text);
+    return result == 1;
+  }
+}
+```
+
+---
+
+### 2.3 Use It in Your Flutter App
+
+```dart
+// In main.dart or your widget
+
+late SarcasmDetector detector;
+
+@override
+void initState() {
+  super.initState();
+  detector = SarcasmDetector();
+  detector.loadModel('assets/naive_bayes_model.json');
+}
+
+void _checkSarcasm() async {
+  final inputText = _controller.text;
+  final isSarcastic = await detector.isSarcastic(inputText);
+  setState(() {
+    result = isSarcastic ? "Sarcasm Detected" : "No Sarcasm";
+  });
+}
+```
+
+---
+
+## ✅ Summary
+
+* You trained a Naive Bayes model using `scikit-learn`.
+* Exported the vocabulary, feature log probs, and priors to JSON.
+* Rebuilt the logic in Dart manually to simulate Naive Bayes prediction.
+* This method keeps everything **offline**, **lightweight**, and **TensorFlow-free**.
+
+---
+
+Would you like me to provide a working downloadable `naive_bayes_model.json` from the example above?
+
+
+
+Use Platform Channels (Native Android/iOS Integration)
+You can integrate ONNX Runtime Mobile natively (Android/iOS) and communicate with Flutter using platform channels. Here's a high-level overview:
+
+Android (Kotlin/Java):
+
+Add ONNX Runtime Mobile .aar to your android/app/libs/.
+
+Use the Java/Kotlin API from ONNX Runtime Java.
+
+Write a method to accept text input and return prediction results via MethodChannel.
+
+
+
+
